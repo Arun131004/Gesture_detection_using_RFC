@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center">Gesture Recognition</h1>
+        
+        <!-- Model Information -->
+        <div class="mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-2xl font-semibold mb-4">Model Information</h2>
+                {% if model_info %}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <div class="text-lg font-medium text-blue-800">Accuracy</div>
+                        <div class="text-3xl font-bold text-blue-900">{{ model_info.accuracy }}</div>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <div class="text-lg font-medium text-green-800">Training Samples</div>
+                        <div class="text-3xl font-bold text-green-900">{{ model_info.training_size }}</div>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <div class="text-lg font-medium text-purple-800">Number of Classes</div>
+                        <div class="text-3xl font-bold text-purple-900">{{ model_info.classes|length }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-gray-500 text-center py-4">
+                    No model trained yet. Add some gestures to train the model.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Available Gestures -->
+        <div class="mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-2xl font-semibold mb-4">Available Gestures</h2>
+                {% if gestures %}
+                <div id="gestureList" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {% for gesture in gestures %}
+                    <div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm flex justify-between items-center hover:bg-gray-50">
+                        <span class="text-lg font-medium text-gray-700">{{ gesture }}</span>
+                        <button onclick="removeGesture('{{ gesture }}')" class="text-red-500 hover:text-red-700 focus:outline-none">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-gray-500 text-center py-4">
+                    No gestures available. Add some gestures to get started.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Add New Gesture -->
+        <div class="mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-2xl font-semibold mb-4">Add New Gesture</h2>
+                <div class="mb-4">
+                    <input type="text" id="gestureName" placeholder="Enter gesture name" 
+                           class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="relative mb-4">
+                    <video id="video" class="w-full h-64 bg-black rounded" autoplay></video>
+                    <canvas id="canvas" class="hidden"></canvas>
+                </div>
+                <div class="flex space-x-4">
+                    <button id="startRecording" class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        Start Recording
+                    </button>
+                    <button id="stopRecording" class="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" disabled>
+                        Stop Recording
+                    </button>
+                </div>
+                <div id="recordingStatus" class="mt-4 text-sm text-gray-600"></div>
+            </div>
+        </div>
+
+        <!-- Test Model -->
+        <div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-2xl font-semibold mb-4">Test Model</h2>
+                <div class="relative mb-4">
+                    <video id="testVideo" class="w-full h-64 bg-black rounded" autoplay></video>
+                </div>
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+                    <div class="flex flex-col space-y-2">
+                        <div id="prediction" class="text-2xl font-bold text-gray-800">Prediction: None</div>
+                        <div id="confidence" class="text-lg text-gray-600">Confidence: 0%</div>
+                    </div>
+                    <button id="toggleTesting" class="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        Start Testing
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let recordingFrames = [];
+        let isRecording = false;
+        let isTesting = false;
+        let mediaStream = null;
+        let frameCount = 0;
+
+        // Initialize webcam
+        async function initializeWebcam(videoElement) {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = mediaStream;
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                alert('Error accessing webcam. Please make sure you have granted camera permissions.');
+            }
+        }
+
+        // Initialize both video elements
+        initializeWebcam(document.getElementById('video'));
+        initializeWebcam(document.getElementById('testVideo'));
+
+        // Recording functionality
+        document.getElementById('startRecording').addEventListener('click', () => {
+            const gestureName = document.getElementById('gestureName').value.trim();
+            if (!gestureName) {
+                alert('Please enter a gesture name');
+                return;
+            }
+            
+            isRecording = true;
+            frameCount = 0;
+            recordingFrames = [];
+            document.getElementById('startRecording').disabled = true;
+            document.getElementById('stopRecording').disabled = false;
+            document.getElementById('recordingStatus').textContent = 'Recording... (0 frames captured)';
+            captureFrames();
+        });
+
+        document.getElementById('stopRecording').addEventListener('click', async () => {
+            isRecording = false;
+            document.getElementById('startRecording').disabled = false;
+            document.getElementById('stopRecording').disabled = true;
+            document.getElementById('recordingStatus').textContent = 'Processing...';
+            
+            const gestureName = document.getElementById('gestureName').value;
+            const response = await saveGesture(gestureName, recordingFrames);
+            
+            if (response.success) {
+                document.getElementById('recordingStatus').textContent = 
+                    `Successfully saved ${response.frames_saved} frames for gesture "${gestureName}"`;
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                document.getElementById('recordingStatus').textContent = 
+                    'Error saving gesture. Please try again.';
+            }
+        });
+
+        function captureFrames() {
+            if (!isRecording) return;
+
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0);
+
+            const frame = canvas.toDataURL('image/jpeg');
+            recordingFrames.push(frame);
+            frameCount++;
+            
+            document.getElementById('recordingStatus').textContent = 
+                `Recording... (${frameCount} frames captured)`;
+
+            if (frameCount >= 100) {
+                document.getElementById('stopRecording').click();
+                return;
+            }
+
+            setTimeout(captureFrames, 100); // Capture every 100ms
+        }
+
+        async function saveGesture(name, frames) {
+            try {
+                const response = await fetch('/api/add_gesture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        frames: frames
+                    })
+                });
+                
+                return await response.json();
+            } catch (err) {
+                console.error('Error saving gesture:', err);
+                return { success: false, error: err.message };
+            }
+        }
+
+        async function removeGesture(gesture) {
+            if (!confirm(`Are you sure you want to remove the gesture "${gesture}"?`)) return;
+
+            try {
+                const response = await fetch(`/api/remove_gesture/${gesture}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert('Error removing gesture: ' + (result.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Error removing gesture:', err);
+                alert('Error removing gesture. Please try again.');
+            }
+        }
+
+        // Testing functionality
+        document.getElementById('toggleTesting').addEventListener('click', function() {
+            isTesting = !isTesting;
+            this.textContent = isTesting ? 'Stop Testing' : 'Start Testing';
+            this.classList.toggle('bg-red-500');
+            this.classList.toggle('bg-green-500');
+            
+            if (isTesting) {
+                startTesting();
+            }
+        });
+
+        function startTesting() {
+            if (!isTesting) return;
+
+            const video = document.getElementById('testVideo');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0);
+
+            const frame = canvas.toDataURL('image/jpeg');
+
+            // Send frame for prediction
+            fetch('/api/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    frame: frame
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.prediction) {
+                    if (data.prediction === "No hand detected") {
+                        document.getElementById('prediction').textContent = data.prediction;
+                        document.getElementById('confidence').textContent = 'Confidence: N/A';
+                    } else {
+                        document.getElementById('prediction').textContent = `Prediction: ${data.prediction}`;
+                        document.getElementById('confidence').textContent = `Confidence: ${data.confidence}`;
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error getting prediction:', err);
+                document.getElementById('prediction').textContent = 'Error getting prediction';
+                document.getElementById('confidence').textContent = 'Confidence: N/A';
+            });
+
+            if (isTesting) {
+                setTimeout(startTesting, 100); // Test every 100ms
+            }
+        }
+    </script>
+</body>
+</html> 
