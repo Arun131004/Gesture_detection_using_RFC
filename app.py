@@ -10,8 +10,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import base64
 import time
+import sys
+import logging
 
 app = Flask(__name__)
+
+# Add this after app = Flask(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 # Initialize MediaPipe
 mp_hands = mp.solutions.hands
@@ -24,8 +29,12 @@ DATA_PATH = 'data.pickle'
 DATASET_SIZE = 100  # Number of images per gesture
 
 def ensure_data_dir():
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+    try:
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+    except Exception as e:
+        logging.error(f"Error creating data directory: {str(e)}")
+        sys.exit(1)
 
 def get_available_gestures():
     ensure_data_dir()
@@ -126,19 +135,23 @@ def train_model():
 
 @app.route('/')
 def index():
-    gestures = get_available_gestures()
-    model_info = None
-    
-    if os.path.exists(MODEL_PATH):
-        with open(MODEL_PATH, 'rb') as f:
-            model_dict = pickle.load(f)
-            model_info = {
-                'accuracy': f"{model_dict['accuracy'] * 100:.2f}%",
-                'classes': model_dict['classes'],
-                'training_size': model_dict['training_size']
-            }
-    
-    return render_template('index.html', gestures=gestures, model_info=model_info)
+    try:
+        gestures = get_available_gestures()
+        model_info = None
+        
+        if os.path.exists(MODEL_PATH):
+            with open(MODEL_PATH, 'rb') as f:
+                model_dict = pickle.load(f)
+                model_info = {
+                    'accuracy': f"{model_dict['accuracy'] * 100:.2f}%",
+                    'classes': model_dict['classes'],
+                    'training_size': model_dict['training_size']
+                }
+        
+        return render_template('index.html', gestures=gestures, model_info=model_info)
+    except Exception as e:
+        logging.error(f"Error in index route: {str(e)}")
+        return render_template('index.html', gestures=[], model_info=None)
 
 @app.route('/api/gestures')
 def get_gestures():
@@ -237,4 +250,4 @@ def predict():
 
 if __name__ == '__main__':
     ensure_data_dir()
-    app.run(debug=True) 
+    app.run()  # Remove debug=True for production 

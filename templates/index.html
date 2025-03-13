@@ -4,9 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gesture Recognition</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            font-size: 1.2rem;
+            display: none;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-4xl font-bold mb-8 text-center">Gesture Recognition</h1>
         
@@ -71,14 +107,22 @@
                            class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 <div class="relative mb-4">
-                    <video id="video" class="w-full h-64 bg-black rounded" autoplay></video>
+                    <div class="video-container">
+                        <video id="video" class="w-full h-64 bg-black rounded" autoplay></video>
+                        <div id="recordingOverlay" class="video-overlay">
+                            <div class="text-center">
+                                <div class="spinner mx-auto mb-2"></div>
+                                <div id="frameCounter">Recording: 0/100 frames</div>
+                            </div>
+                        </div>
+                    </div>
                     <canvas id="canvas" class="hidden"></canvas>
                 </div>
                 <div class="flex space-x-4">
-                    <button id="startRecording" class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <button id="startRecording" class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50">
                         Start Recording
                     </button>
-                    <button id="stopRecording" class="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2" disabled>
+                    <button id="stopRecording" class="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50" disabled>
                         Stop Recording
                     </button>
                 </div>
@@ -91,7 +135,15 @@
             <div class="bg-white p-6 rounded-lg shadow">
                 <h2 class="text-2xl font-semibold mb-4">Test Model</h2>
                 <div class="relative mb-4">
-                    <video id="testVideo" class="w-full h-64 bg-black rounded" autoplay></video>
+                    <div class="video-container">
+                        <video id="testVideo" class="w-full h-64 bg-black rounded" autoplay></video>
+                        <div id="testingOverlay" class="video-overlay">
+                            <div class="text-center">
+                                <div class="spinner mx-auto mb-2"></div>
+                                <div>Initializing...</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
                     <div class="flex flex-col space-y-2">
@@ -113,20 +165,36 @@
         let mediaStream = null;
         let frameCount = 0;
 
-        // Initialize webcam
-        async function initializeWebcam(videoElement) {
+        // Initialize webcam with error handling
+        async function initializeWebcam(videoElement, overlayId) {
+            const overlay = document.getElementById(overlayId);
+            overlay.style.display = 'flex';
+            
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
                 videoElement.srcObject = mediaStream;
+                await videoElement.play();
+                overlay.style.display = 'none';
             } catch (err) {
                 console.error('Error accessing webcam:', err);
-                alert('Error accessing webcam. Please make sure you have granted camera permissions.');
+                overlay.innerHTML = `
+                    <div class="text-center text-red-500">
+                        Error accessing webcam.<br>
+                        Please make sure you have granted camera permissions.
+                    </div>`;
             }
         }
 
         // Initialize both video elements
-        initializeWebcam(document.getElementById('video'));
-        initializeWebcam(document.getElementById('testVideo'));
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeWebcam(document.getElementById('video'), 'recordingOverlay');
+            initializeWebcam(document.getElementById('testVideo'), 'testingOverlay');
+        });
 
         // Recording functionality
         document.getElementById('startRecording').addEventListener('click', () => {
@@ -141,7 +209,8 @@
             recordingFrames = [];
             document.getElementById('startRecording').disabled = true;
             document.getElementById('stopRecording').disabled = false;
-            document.getElementById('recordingStatus').textContent = 'Recording... (0 frames captured)';
+            document.getElementById('recordingOverlay').style.display = 'flex';
+            document.getElementById('frameCounter').textContent = 'Recording: 0/100 frames';
             captureFrames();
         });
 
@@ -179,19 +248,21 @@
             recordingFrames.push(frame);
             frameCount++;
             
-            document.getElementById('recordingStatus').textContent = 
-                `Recording... (${frameCount} frames captured)`;
+            document.getElementById('frameCounter').textContent = 
+                `Recording: ${frameCount}/100 frames`;
 
             if (frameCount >= 100) {
                 document.getElementById('stopRecording').click();
                 return;
             }
 
-            setTimeout(captureFrames, 100); // Capture every 100ms
+            setTimeout(captureFrames, 100);
         }
 
         async function saveGesture(name, frames) {
+            const recordingStatus = document.getElementById('recordingStatus');
             try {
+                recordingStatus.textContent = 'Saving gesture...';
                 const response = await fetch('/api/add_gesture', {
                     method: 'POST',
                     headers: {
@@ -203,9 +274,14 @@
                     })
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 return await response.json();
             } catch (err) {
                 console.error('Error saving gesture:', err);
+                recordingStatus.textContent = `Error: ${err.message}`;
                 return { success: false, error: err.message };
             }
         }
@@ -237,54 +313,57 @@
             this.classList.toggle('bg-red-500');
             this.classList.toggle('bg-green-500');
             
+            const testingOverlay = document.getElementById('testingOverlay');
             if (isTesting) {
+                testingOverlay.style.display = 'none';
                 startTesting();
             }
         });
 
-        function startTesting() {
+        async function startTesting() {
             if (!isTesting) return;
 
             const video = document.getElementById('testVideo');
             const canvas = document.getElementById('canvas');
             const context = canvas.getContext('2d');
+            const prediction = document.getElementById('prediction');
+            const confidence = document.getElementById('confidence');
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0);
+            try {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0);
 
-            const frame = canvas.toDataURL('image/jpeg');
+                const frame = canvas.toDataURL('image/jpeg');
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ frame: frame })
+                });
 
-            // Send frame for prediction
-            fetch('/api/predict', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    frame: frame
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.prediction) {
-                    if (data.prediction === "No hand detected") {
-                        document.getElementById('prediction').textContent = data.prediction;
-                        document.getElementById('confidence').textContent = 'Confidence: N/A';
-                    } else {
-                        document.getElementById('prediction').textContent = `Prediction: ${data.prediction}`;
-                        document.getElementById('confidence').textContent = `Confidence: ${data.confidence}`;
-                    }
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            })
-            .catch(err => {
+
+                const data = await response.json();
+                if (data.prediction) {
+                    prediction.textContent = data.prediction === "No hand detected" 
+                        ? data.prediction 
+                        : `Prediction: ${data.prediction}`;
+                    confidence.textContent = data.prediction === "No hand detected"
+                        ? 'Confidence: N/A'
+                        : `Confidence: ${data.confidence}`;
+                }
+            } catch (err) {
                 console.error('Error getting prediction:', err);
-                document.getElementById('prediction').textContent = 'Error getting prediction';
-                document.getElementById('confidence').textContent = 'Confidence: N/A';
-            });
+                prediction.textContent = 'Error getting prediction';
+                confidence.textContent = 'Confidence: N/A';
+            }
 
             if (isTesting) {
-                setTimeout(startTesting, 100); // Test every 100ms
+                setTimeout(startTesting, 100);
             }
         }
     </script>
