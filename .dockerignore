@@ -1,8 +1,12 @@
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
 data/
-model.p
-data.pickle
-.env
+*.p
+*.pickle
 .git
+.gitignore

@@ -1,5 +1,5 @@
-# Use Python 3.8 slim image
-FROM python:3.8-slim
+# Use Python 3.8 image
+FROM python:3.8.10-slim
 
 # Set working directory
 WORKDIR /app
@@ -8,22 +8,29 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    gcc \
+    g++ \
+    python3-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Install Python packages first
 COPY requirements.txt .
+RUN python -m pip install --upgrade pip && \
+    pip install wheel setuptools && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application
+# Copy application code
 COPY . .
 
 # Create data directory
 RUN mkdir -p data
 
-# Expose port
+# Set environment variable for port
+ENV PORT=8000
+
+# Expose the port
 EXPOSE 8000
 
-# Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
+# Start the application
+CMD gunicorn --bind 0.0.0.0:$PORT app:app --timeout 300
