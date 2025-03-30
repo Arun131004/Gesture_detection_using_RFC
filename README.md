@@ -2,7 +2,7 @@
 
 This web application allows you to train and test hand gesture recognition models directly in your browser. Built with Flask, OpenCV, MediaPipe, and scikit-learn.
 
-## Features
+## Featuress
 
 - View all available trained gestures
 - Add new gestures using your webcam
