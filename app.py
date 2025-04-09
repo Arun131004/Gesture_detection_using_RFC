@@ -12,9 +12,12 @@ import base64
 import time
 import sys
 import logging
+<<<<<<< HEAD
 import requests
 
 ESP32_IP = "http://192.168.92.198"
+=======
+>>>>>>> 2dc9f819d63a209b06e995f6acc460deb9daab00
 
 app = Flask(__name__)
 
@@ -242,11 +245,14 @@ def predict():
         if has_hand:
             prediction = model.predict([np.asarray(data_aux)])
             confidence = model.predict_proba([np.asarray(data_aux)]).max()
+<<<<<<< HEAD
             gesture = prediction[0]
             if gesture.lower() == "lights on":
                 requests.get(f"{ESP32_IP}/led/on")
             elif gesture.lower() == "lights off":
                 requests.get(f"{ESP32_IP}/led/off")
+=======
+>>>>>>> 2dc9f819d63a209b06e995f6acc460deb9daab00
             return jsonify({
                 "prediction": prediction[0],
                 "confidence": f"{confidence * 100:.2f}%"
